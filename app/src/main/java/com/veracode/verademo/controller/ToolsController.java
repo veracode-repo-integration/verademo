@@ -3,6 +3,8 @@ package com.veracode.verademo.controller;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.concurrent.TimeUnit;
 
 import javax.servlet.ServletContext;
@@ -46,21 +48,32 @@ public class ToolsController {
 		String output = "";
 		Process proc;
 
-		logger.info("Pinging: " + host);
+		// CWE-117 fix: Sanitize host parameter before logging
+		try {
+			String safeHost = URLEncoder.encode(host, "UTF-8");
+			logger.info("Pinging: " + safeHost);
+		} catch (UnsupportedEncodingException e) {
+			logger.info("Pinging: [encoding error]");
+		}
+
+		// CWE-78 fix: Validate host parameter to prevent command injection
+		if (!isValidHost(host)) {
+			return "Invalid host parameter";
+		}
 
 		try {
-			/* START EXAMPLE VULNERABILITY */
 			proc = Runtime.getRuntime().exec(new String[] { "bash", "-c", "ping -c1 " + host });
-			/* END EXAMPLE VULNERABILITY */
 
 			proc.waitFor(5, TimeUnit.SECONDS);
-			InputStreamReader isr = new InputStreamReader(proc.getInputStream());
-			BufferedReader br = new BufferedReader(isr);
 
-			String line;
+			// CWE-404 fix: Use try-with-resources to ensure BufferedReader is closed
+			try (InputStreamReader isr = new InputStreamReader(proc.getInputStream());
+			     BufferedReader br = new BufferedReader(isr)) {
 
-			while ((line = br.readLine()) != null) {
-				output += line + "\n";
+				String line;
+				while ((line = br.readLine()) != null) {
+					output += line + "\n";
+				}
 			}
 
 			logger.info(proc.exitValue());
@@ -74,23 +87,28 @@ public class ToolsController {
 	}
 
 	private String fortune(String fortuneFile) {
+		// CWE-78 fix: Validate fortuneFile parameter to prevent command injection
+		if (!isValidFortuneFile(fortuneFile)) {
+			return "Invalid fortune file parameter";
+		}
+
 		String cmd = "/bin/fortune " + fortuneFile;
 
 		String output = "";
 		Process proc;
 		try {
-			/* START EXAMPLE VULNERABILITY */
 			proc = Runtime.getRuntime().exec(new String[] { "bash", "-c", cmd });
-			/* END EXAMPLE VULNERABILITY */
 
 			proc.waitFor(5, TimeUnit.SECONDS);
-			InputStreamReader isr = new InputStreamReader(proc.getInputStream());
-			BufferedReader br = new BufferedReader(isr);
 
-			String line;
+			// CWE-404 fix: Use try-with-resources to ensure BufferedReader is closed
+			try (InputStreamReader isr = new InputStreamReader(proc.getInputStream());
+			     BufferedReader br = new BufferedReader(isr)) {
 
-			while ((line = br.readLine()) != null) {
-				output += line + "\n";
+				String line;
+				while ((line = br.readLine()) != null) {
+					output += line + "\n";
+				}
 			}
 		} catch (IOException ex) {
 			logger.error(ex);
@@ -99,5 +117,29 @@ public class ToolsController {
 		}
 
 		return output;
+	}
+
+	/**
+	 * Validates host parameter to prevent command injection.
+	 * Allows only alphanumeric characters, dots, hyphens, and underscores.
+	 */
+	private boolean isValidHost(String host) {
+		if (host == null || host.isEmpty()) {
+			return false;
+		}
+		// Allow only safe characters: alphanumeric, dots, hyphens
+		return host.matches("^[a-zA-Z0-9.-]+$");
+	}
+
+	/**
+	 * Validates fortune file parameter to prevent command injection.
+	 * Allows only alphanumeric characters and hyphens.
+	 */
+	private boolean isValidFortuneFile(String fortuneFile) {
+		if (fortuneFile == null || fortuneFile.isEmpty()) {
+			return false;
+		}
+		// Allow only safe characters: alphanumeric and hyphens
+		return fortuneFile.matches("^[a-zA-Z0-9-]+$");
 	}
 }
