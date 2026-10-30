@@ -52,8 +52,30 @@ public class Utils {
 	}
 
 	public static void setCookie(HttpServletResponse response, String name, String value) {
-		response.addCookie(new Cookie(name, value));
+		// Sanitize cookie value to prevent CRLF injection (CWE-113)
+		String sanitizedValue = sanitizeCookieValue(value);
+
+		Cookie cookie = new Cookie(name, sanitizedValue);
+
+		// Set Secure attribute for HTTPS connections (CWE-614)
+		if (isConnectionFromHttps()) {
+			cookie.setSecure(true);
+		}
+
+		response.addCookie(cookie);
 		upgradeCookieSecurityForHttpsIfRequired(response);
+	}
+
+	/**
+	 * Sanitizes cookie values by removing carriage return and line feed characters
+	 * to prevent HTTP response splitting attacks.
+	 */
+	private static String sanitizeCookieValue(String value) {
+		if (value == null) {
+			return null;
+		}
+		// Remove CR (\r) and LF (\n) characters to prevent HTTP response splitting
+		return value.replaceAll("[\r\n]", "");
 	}
 
 	public static String redirect(String destination) {
