@@ -52,7 +52,23 @@ public class Utils {
 	}
 
 	public static void setCookie(HttpServletResponse response, String name, String value) {
-		response.addCookie(new Cookie(name, value));
+		// Sanitize cookie value to prevent CRLF injection (CWE-113)
+		String sanitizedValue = value;
+		if (sanitizedValue != null) {
+			sanitizedValue = sanitizedValue.replace("\r", "").replace("\n", "");
+		} else {
+			sanitizedValue = "";
+		}
+
+		Cookie cookie = new Cookie(name, sanitizedValue);
+
+		// Set Secure attribute for HTTPS sessions (CWE-614)
+		// Check if connection is from HTTPS using environment variable
+		if (System.getenv("CONNECTION_FROM_HTTPS") != null && System.getenv("CONNECTION_FROM_HTTPS").equals("1")) {
+			cookie.setSecure(true);
+		}
+
+		response.addCookie(cookie);
 		upgradeCookieSecurityForHttpsIfRequired(response);
 	}
 
